@@ -226,9 +226,36 @@ class GitHubMCP:
             else:
                 response.raise_for_status()
                 return LogsResponse(message="Unexpected response")
+    
+    async def get_run_status(self,owner:str,repo:str,run_id:int)->RunStatus:
+        logger.info(f"Fetching status for run {run_id}")
+        data=await self._get(f"repos/{owner}/{repo}/actions/runs/{run_id}")
+        return RunStatus(**data)
 
+    async def rerun_workflow(self,owner:str,repo:str,run_id:int,failed_jobs_only:bool=False)->RerunResponse:
+        logger.info(f"Re-running workflow {run_id} (failed_jobs_only={failed_jobs_only})")
+        if failed_jobs_only:
+            endpoint=f"repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs"
+        else:
+            endpoint=f"repos/{owner}/{repo}/actions/runs/{run_id}/rerun"
+        
+        try:
+            await self._post(endpoint)
+            return RerunResponse(success=True,message=f"Workflow {run_id} re-run triggered successfully", run_id=run_id,failed_jobs_only=failed_jobs_only)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code==403:
+                return RerunResponse(success=False,message="Cannot re-run workflow yet. Wait at least 30 sec after failure.",run_id=run_id,failed_jobs_only=failed_jobs_only)
+            raise
+    
+    async def get_rate_limit(self)->RateLimitStatus:
+        logger.info("Fetching rate limit status")
+        data=await self._get("rate_limit")
+        core=data["resources"]["core"]
 
+        reset_time=datetime.fromtimestamp(core["reset"])
 
+        return RateLimitStatus(limit=core["limit"],remaining=core["remaining"],used=core["used"],reset=reset_time.isoformat(),reset_in_seconds=(reset_time-datetime.now()).total_seconds())
+    
 mcp = FastMCP("github-mcp-server")
 github = GitHubMCP(token=os.getenv("GITHUB_TOKEN"))
 

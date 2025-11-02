@@ -39,5 +39,63 @@ async def test_github_mcp():
     except Exception as e:
         print(f"Error:{e}\n")
     
+    print("get_failed_runs() test")
+    try:
+        failed=await github.get_failed_runs(OWNER,REPO,limit=3)
+        print(f"Found {failed.total_count} failed runs")
+        if failed.failed_runs:
+            print(f"First failed: {failed.failed_runs[0].name}\n")
+        else:
+            print("No failed runs\n")
+    except Exception as e:
+        print(f"Error: {e}\n")
+    
+    run_id=None
+    try:
+        runs=await github.get_workflows_runs(OWNER,REPO,per_page=1)
+        if runs.workflow_runs:
+            run_id=runs.workflow_runs[0].id
+    except:
+        pass
+
+    print("get_run_status() test")
+    if run_id:
+        try:
+            status=await github.get_run_status(OWNER,REPO,run_id)
+            print(f"Run #{status.run_number}: {status.status}\n")
+        except Exception as e:
+            print(f"Error: {e}\n")
+    else:
+        print(" Skipped (No runs available)\n")
+    
+    print("get_run_logs() test")
+    if run_id:
+        try:
+            logs=await github.get_run_logs(OWNER,REPO,run_id)
+            print(f"{logs.message}")
+            if logs.download_url:
+                print(f"URL available\n")
+            elif logs.error:
+                print(f"{logs.error}\n")
+        except Exception as e:
+            print(f"Error: {e}\n")
+    else:
+        print(" Skipped (No runs available)\n")
+    
+    print("get_rate_limit() test")
+    try:
+        rate=await github.get_rate_limit()
+        print(f"Rate limit: {rate.remaining}/{rate.limit} remaing\n")
+    except Exception as e:
+        print(f"Error: {e}\n")
+    
+    print("rerun_workflow() test")
+    print("Won't be triggered for testing, will be implemented later on\n")
+
+
+    print("="*60)
+    print("TESTS COMPLETE")
+    print("="*60+"\n")
+    
 if __name__=="__main__":
     asyncio.run(test_github_mcp())
