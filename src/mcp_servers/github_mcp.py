@@ -178,6 +178,17 @@ class GitHubMCP:
         data = await self._get(f"repos/{owner}/{repo}")
         return RepoInfo(**data)
 
+    async def get_workflow_runs(self,owner:str,repo:str,branch:Optional[str]=None,status:Optional[str]=None,per_page:int=30,page:int=1)->WorkflowRunsResponse:
+        logger.info(f"Fetching workflow runs: {owner}/{repo}")
+        params={"per_page":min(per_page,100),"page":page}
+        if branch:
+            params["branch"]=branch
+        if status:
+            params["status"]=status
+        
+        data=await self._get(f"repos/{owner}/{repo}/actions/runs",params=params)
+        return WorkflowRunsResponse(**data)
+
 mcp = FastMCP("github-mcp-server")
 github = GitHubMCP(token=os.getenv("GITHUB_TOKEN"))
 
@@ -186,6 +197,10 @@ github = GitHubMCP(token=os.getenv("GITHUB_TOKEN"))
 async def get_repo(owner: str, repo: str) -> RepoInfo:
     """Get repository information"""
     return await github.get_repo(owner, repo)
+
+@mcp.tool()
+async def get_workflow_runs(owner:str,repo:str,branch:Optional[str]=None,status:Optional[str]=None,per_page:int=30,page:int=1)->WorkflowRunsResponse:
+    return await github.get_workflow_runs(owner,repo,branch,status,per_page,page)
 
 if __name__ == "__main__":
     logger.info("Starting GitHub MCP Server...")

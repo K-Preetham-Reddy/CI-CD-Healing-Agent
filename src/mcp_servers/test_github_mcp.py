@@ -10,7 +10,7 @@ async def test_github_mcp():
     print("GITHUB MCP SERVER - SIMPLE TESTS")
     print("="*60+"\n")
     OWNER="K-Preetham-Reddy"
-    REPO="ExpressionTracker-Sentiment-Analysis-for-Dyslexic-Kids-During-Gameplay"
+    REPO="flaky-test-repo"
 
     try:
         github=GitHubMCP()
@@ -25,6 +25,17 @@ async def test_github_mcp():
         repo=await github.get_repo(OWNER,REPO)
         print(f"{repo.full_name}")
         print(f"Stars: {repo.stars}, Forks: {repo.forks}\n")
+    except Exception as e:
+        print(f"Error:{e}\n")
+    
+    print("get_workflow_runs() test")
+    try:
+        runs=await github.get_workflow_runs(OWNER,REPO,per_page=3)
+        print(f"Found {runs.total_count} total runs")
+        if runs.workflow_runs:
+            print(f"Latest: {runs.workflow_runs[0].name}\n")
+        else:
+            print("No workflow runs found\n")
     except Exception as e:
         print(f"Error:{e}\n")
     
