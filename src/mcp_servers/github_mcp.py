@@ -178,7 +178,7 @@ class GitHubMCP:
         data = await self._get(f"repos/{owner}/{repo}")
         return RepoInfo(**data)
 
-    async def get_workflow_runs(self,owner:str,repo:str,branch:Optional[str]=None,status:Optional[str]=None,per_page:int=30,page:int=1)->WorkflowRunsResponse:
+    async def get_workflow_runs(self,owner:str,repo:str,branch:str="main",status:Optional[str]=None,per_page:int=30,page:int=1)->WorkflowRunsResponse:
         logger.info(f"Fetching workflow runs: {owner}/{repo}")
         params={"per_page":min(per_page,100),"page":page}
         if branch:
@@ -188,6 +188,46 @@ class GitHubMCP:
         
         data=await self._get(f"repos/{owner}/{repo}/actions/runs",params=params)
         return WorkflowRunsResponse(**data)
+
+    async def get_failed_runs(self,owner:str,repo:str,branch: str="main",limit:Optional[int]=None)->FailedRunsResponse:
+        logger.info(f"Fetching failed runs:{owner}/{repo}")
+        failed_runs=[]
+        page=1
+        per_page=100
+
+        while True:
+            response=await self.get_workflow_runs(owner,repo,branch,status="completed",per_page=per_page,page=page)
+            for run in response.workflow_runs:
+                if run.conclusion=="failure":
+                    failed_runs.append(run)
+                    if limit and len(failed_runs)>=limit:
+                        return FailedRunsResponse(
+                            total_count=len(failed_runs),
+                            failed_runs=failed_runs
+                        )
+            if len(response.workflow_runs)<per_page:
+                break
+            page+=1
+        
+        return FailedRunsResponse(total_count=len(failed_runs),failed_runs=failed_runs)
+    
+    async def get_run_logs(self,owner:str,repo:str,run_id:int)->LogsResponse:
+        logger.info(f"Fetching logs for run {run_id}")
+        endpoint=f"repos/{owner}/{repo}/actions/runs/{run_id}/logs"
+        url=f"{self.base_url}/{endpoint}"
+
+        async with httpx.AsyncClient() as client:
+            response=await client.get(url,headers=self.headers,follow_redirects=False,timeout=30.0)
+            if response.status_code==302:
+                download_url=response.headers.get("Location")
+                return LogsResponse(download_url=download_url,message="Use this URL to download the logs zp file")
+            elif response.status_code==410:
+                return LogsResponse(message="Logs unavailable",error="Logs have expired(logs are only kept for 90 days)")
+            else:
+                response.raise_for_status()
+                return LogsResponse(message="Unexpected response")
+
+
 
 mcp = FastMCP("github-mcp-server")
 github = GitHubMCP(token=os.getenv("GITHUB_TOKEN"))
