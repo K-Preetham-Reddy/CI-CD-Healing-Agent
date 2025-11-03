@@ -3,9 +3,9 @@ from typing import Dict, Any
 import logging
 from datetime import datetime
 
-from .state import AgentState
-from .node.start_node import start_node
-from .nodes.github_monitor_node import github_monitor_node
+from src.agents.state import AgentState
+from src.agents.nodes.start_node import start_node
+from src.agents.nodes.github_monitor_node import github_monitor_node
 
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger("AgentGraph")
@@ -37,11 +37,10 @@ class AgentWorkflowGraph:
     def _route_after_monitor(self,state:AgentState)->str:
         failures=state.context.get("detected_failures",[])
 
-        if failures and state.status=="monitoring":
-            logger.info(f"Detected {len(failures)} failures, continuous workflow")
-            return "continue"
-        
-        logger.info("No failures detected or processing complete, ending workflow")
+        if failures:
+            logger.info(f"Detected {len(failures)} failures - ending workflow")
+        else:
+            logger.info("No failures detected - ending workflow")
         return "end"
 
     def compile(self):
@@ -80,6 +79,9 @@ class AgentWorkflowGraph:
         result=await self.app.ainvoke(state)
 
         logger.info("Graph execution completed")
+
+        if isinstance(result,dict):
+            return AgentState(**result)
         return result
     
     def execute_sync(self,initial_state:Dict[str,Any])->AgentState:
@@ -94,6 +96,8 @@ class AgentWorkflowGraph:
         result=self.app.invoke(state)
 
         logger.info("Graph execution completed")
+        if isinstance(result,dict):
+            return AgentState(**result)
         return result
 
 def create_agent_graph()->AgentWorkflowGraph:

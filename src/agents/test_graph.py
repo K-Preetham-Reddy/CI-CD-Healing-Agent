@@ -8,8 +8,8 @@ load_dotenv()
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from agents.graph import create_agent_graph
-from agents.state import AgentState
+from src.agents.graph import create_agent_graph
+from src.agents.state import AgentState
 
 async def test_full_workflow():
     print("\n"+"="*80)
@@ -176,8 +176,8 @@ async def test_failure_detection_on_real_repo():
     print("="*80 + "\n")
     
 
-    test_owner = "K-Preetham-Reddy"
-    test_repo = "flaky-test-repo"
+    test_owner = os.getenv("OWNER")
+    test_repo = os.getenv("REPO")
     
     if not test_owner or not test_repo:
         print("  Skipping real repository test")
