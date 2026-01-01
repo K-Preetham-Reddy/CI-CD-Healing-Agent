@@ -101,14 +101,58 @@ async def test_ollama_connection():
 
         response=client.generate("What model are you?",max_tokens=10)
         print(f"Test response: {response.strip()}")
+        print("\nConnection test passed\n")
         return True
 
     except ConnectionError as e:
         print(f"Connection failed: {e}")
+        print("\nSetup Issue")
         return False
     except Exception as e:
         print(f"Error: {e}\n")
         return False
+
+async def test_single_failure_analysis():
+    print("\nTEST 1: Single Failure Analysis\n")
+
+    mock_failure={
+        "id":123456,
+        "run_number":42,
+        "name":"CI Tests",
+        "head_branch":"main",
+        "conclusion":"failure",
+        "url":"https://github.com/owner/repo/actions/runs/123456"
+    }
+
+    state=AgentState(
+        id="test-analysis-1",
+        name="Analysis Test",
+        role="analyzer",
+        status="monitoring",
+        memory=[],
+        goals=["Test analysis"],
+        current_task=None,
+        sub_tasks=[],
+        context={
+            "owner":"test-owner",
+            "repo":"test-repo",
+            "detected_failures":[mock_failure]
+        },
+        last_updated=datetime.now().isoformat()
+    )
+
+    print("Ollama Analysis...")
+    result=await failure_analysis_node(state)
+
+    print(f"\nStatus: {result.status}")
+    print(f"Current Task: {result.current_task}")
+
+    analyzed=result.context.get("analyzed_failures",[])
+    if analyzed:
+        analysis=analyzed[0].get("analysis",{})
+        print(f"\nAnalysis Result:")
+        print(f"- Category: {analysis.get('error_category','N/A')}")
+        print(f" Severity: {analysis.get('severity','N/A')}")
 
         
 
