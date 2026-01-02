@@ -164,8 +164,36 @@ async def test_single_failure_analysis():
     print(f" Successful: {summary.get('successful',0)}")
     print(f" Failed: {summary.get('failed',0)}")
 
-    
+async def test_classification_accuracy():
+    print("TEST 2: Classification Accuracy (Ollama)")
 
+    try:
+        client=get_ollama_client()
+    except Exception as e:
+        print(f" Can't Run Test: {e}")
+        return None
+
+    from agents.nodes.analysis_node import analyze_failure_with_ollama
+
+    correct = 0
+    total = len(TEST_CASES)
+    results=[]
+
+    for i, test_case in enumerate(TEST_CASES,1):
+        print(f"\nTest Case {i}/{total}: {test_case['name']}")
+
+        mock_failure={
+            "id":i,
+            "run_number":i,
+            "name":test_case['name'],
+            "head_branch":"main",
+            "conclusion":"failure"
+        }
+
+        analysis = await analyze_failure_with_ollama(mock_failure, test_case['logs'],client)
+
+        expected=test_case['expected']
+        
         
 
 
