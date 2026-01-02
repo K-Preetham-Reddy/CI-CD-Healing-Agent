@@ -152,7 +152,19 @@ async def test_single_failure_analysis():
         analysis=analyzed[0].get("analysis",{})
         print(f"\nAnalysis Result:")
         print(f"- Category: {analysis.get('error_category','N/A')}")
-        print(f" Severity: {analysis.get('severity','N/A')}")
+        print(f"- Severity: {analysis.get('severity','N/A')}")
+        print(f"- Is Flaky: {analysis.get("is_flaky",False)}")
+        print(f"- Confidence: {analysis.get('confidence_score',0):.2f}")
+        print(f"- Root Cause: {analysis.get('root_cause','N/A')[:80]}")
+        print(f"- Suggested Fix: {analysis.get('suggested_fix','N/A')[:100]}...")
+
+    summary=result.context.get("analysis_summary",{})
+    print(f"\nSummary: ")
+    print(f" Total:{summary.get('total_analyzed',0)}")
+    print(f" Successful: {summary.get('successful',0)}")
+    print(f" Failed: {summary.get('failed',0)}")
+
+    
 
         
 
