@@ -193,7 +193,28 @@ async def test_classification_accuracy():
         analysis = await analyze_failure_with_ollama(mock_failure, test_case['logs'],client)
 
         expected=test_case['expected']
-        
+        category_match=analysis.get('error_category')==expected['category']
+        flaky_match=analysis.get('is_flaky')==expected.get('is_flaky',False)
+
+        if category_match:
+            correct+=1
+            result="PASS"
+        else:
+            result="FAIL"
+
+        results.append({
+            "name":test_case['name'],
+            "expected":expected['category'],
+            "got":analysis.get('error_category'),
+            "match":category_match
+        })
+
+        print(f"{result}")
+        print(f" Expected: {expected['category']}")
+        print(f" Got: {analysis.get('error_category')}")
+        print(f" Root Cause: {analysis.get('root_cause','N/A')[:80]}")
+        print(f" Confidence: {analysis.get('confidence_score',0):.2f}")
+
         
 
 
