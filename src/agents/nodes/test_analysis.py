@@ -214,7 +214,10 @@ async def test_classification_accuracy():
         print(f" Got: {analysis.get('error_category')}")
         print(f" Root Cause: {analysis.get('root_cause','N/A')[:80]}")
         print(f" Confidence: {analysis.get('confidence_score',0):.2f}")
-
+        
+    accuracy =(correct/total)*100
+    print(f"ACCURACY: {correct}/{total} ({accuracy:.1f}%)")
+    
         
 
 
