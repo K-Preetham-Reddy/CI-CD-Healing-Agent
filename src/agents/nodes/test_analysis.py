@@ -217,7 +217,71 @@ async def test_classification_accuracy():
         
     accuracy =(correct/total)*100
     print(f"ACCURACY: {correct}/{total} ({accuracy:.1f}%)")
+
+    if accuracy>=60:
+        print(" Accuracy target MET (>=60% for Ollama)")
+    else:
+        print(" Accuracy target NOT MET (need >=60%)")
+        print("\nNote: Ollama model is not performing well")
+        print("3B parameter model")
     
+    return accuracy
+
+async def test_multiple_failures():
+    print("TEST 3: Multiple Failures Analysis")
+
+    mock_failures=[
+        {
+            "id":100+i,
+            "run_number":i,
+            "name":f"Test Run {i}",
+            "head_branch":"main",
+            "conclusion":"failure",
+            "url":f"https://github.com/owner/repo/actions/runs/{100+i}"
+        }
+        for i in range(1,4)
+    ]
+
+    state=AgentState(
+        id="test-multi",
+        name="Multi Test",
+        role="analyzer",
+        status="monitoring",
+        memory=[],
+        goals=["Test multiple"],
+        current_task=None,
+        sub_task=None,
+        sub_tasks=[],
+        context={
+            "owner":"test-owner",
+            "repo":"test-repo",
+            "detected_failures":mock_failures
+        },
+        last_updated=datetime.now().isoformat()
+    )
+    print(f"Analyzing {len(mock_failures)} failures with Ollama...")
+    result=await failure_analysis_node(state)
+
+    summary =result.context.get("analysis_summary",{})
+    analyzed=result.context.get("analyzed_failures",{})
+    
+    print(f" Anlysis Complete")
+    print(f" Total Analyzed: {summary.get('total_analyzed',0)}")
+    print(f" Successful: {summary.get('successful',0)}")
+    print(f" High Confidence: {summary.get('high_confidence',0)}")
+    print(f" Flaky Tests: {summary.get('flaky_tests',0)}")
+
+    print(f"\n Categories Detected: ")
+    for category, count in summary.get('categories',{}).items():
+        print(f"     - {category}:{count}")
+    
+    print(f"\n Memory Entries: {len(result.memory)}")
+    if result.memory:
+        print(f" Latest: {result.memory[-1]}")
+
+
+
+
         
 
 
