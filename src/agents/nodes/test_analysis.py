@@ -279,6 +279,26 @@ async def test_multiple_failures():
     if result.memory:
         print(f" Latest: {result.memory[-1]}")
 
+async def run_all_tests():
+    
+    if not await test_ollama_connection():
+        print("\n Ollama not available. Tests aborted.")
+        return
+    
+    await test_single_failure_analysis()
+    accuracy =await test_classification_accuracy()
+    await test_multiple_failures()
+
+    if accuracy and accuracy>=60:
+        print(" Tests passed with >=60% accuracy")
+        print(" Easy margins due to the usage of local 3B model")
+    else:
+        print("Tests Complete")
+        print(" Ollama model note performing well")
+        print(" You are doomed")
+
+if __name__ == "__main__":
+    asyncio.run(run_all_tests())
 
 
 
