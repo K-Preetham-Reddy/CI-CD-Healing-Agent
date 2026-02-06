@@ -5,9 +5,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from agents.state import AgentState
-from agents.nodes.analysis_node import failure_analysis_node
-from agents.config import get_ollama_client
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from src.agents.state import AgentState
+from src.agents.nodes.analysis_node import failure_analysis_node
+from src.agents.config import get_ollama_client
 
 TEST_CASES = [
     {

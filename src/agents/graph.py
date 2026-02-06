@@ -6,6 +6,7 @@ from datetime import datetime
 from src.agents.state import AgentState
 from src.agents.nodes.start_node import start_node
 from src.agents.nodes.github_monitor_node import github_monitor_node
+from src.agents.nodes.analysis_node import failure_analysis_node
 
 logging.basicConfig(level=logging.INFO)
 logger=logging.getLogger("AgentGraph")
@@ -20,6 +21,7 @@ class AgentWorkflowGraph:
     def _build_graph(self):
         self.graph.add_node("start",start_node)
         self.graph.add_node("github_monitor",github_monitor_node)
+        self.graph.add_node("analysis",failure_analysis_node)
 
         self.graph.set_entry_point("start")
         self.graph.add_edge("start","github_monitor")

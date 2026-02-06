@@ -136,61 +136,127 @@ def parse_ollama_response(response_text:str)->Dict[str,Any]:
             "parse_error":True
         }  
 
-async def analyze_failure_with_ollama(failure: Dict[str,Any],logs:str,client)->Dict[str,Any]:
-    prompt=FAILURE_ANALYSIS_PROMPT.format(
-        run_number=failure.get("run_number","N/A"),
-        workflow_name=failure.get("name","Unknown"),
-        branch=failure.get("head_branch","N/A"),
-        conclusion=failure.get("conclusion","failure"),
-        logs=logs[:6000]
-    )
+async def analyze_failure_with_ollama(
+    failure: Dict[str, Any],
+    logs: str,
+    client
+) -> Dict[str, Any]:
+    """
+    Analyze a single failure using Ollama
+    
+    Args:
+        failure: Failure data dictionary
+        logs: Log content
+        client: Ollama client
+        
+    Returns:
+        Analysis result dictionary
+    """
+    # Simpler, more direct prompt for small models
+    prompt = f"""Analyze this error and respond with ONLY valid JSON (no explanation):
 
+Error from: {failure.get('name', 'Unknown')} (Run #{failure.get('run_number', 'N/A')})
+
+Logs:
+{logs[:3000]}
+
+Return this exact JSON structure:
+{{
+  "error_category": "<pick one: test_failure, build_error, dependency_error, timeout_error, permission_error, configuration_error, network_error, environment_error, unknown>",
+  "error_type": "<specific error name>",
+  "severity": "<pick one: critical, high, medium, low>",
+  "root_cause": "<brief cause>",
+  "affected_components": ["<component>"],
+  "is_flaky": <true or false>,
+  "confidence_score": <0.0 to 1.0>,
+  "suggested_fix": "<fix suggestion>",
+  "reasoning": "<analysis>"
+}}
+
+JSON:"""
+    
     try:
         logger.info(f"Analyzing failure #{failure.get('run_number')} with Ollama ({OLLAMA_MODEL})")
-
-        messages=[
-            {
-                "role":"system",
-                "content":"You are an expert DevOps engineer. Always respond with valid JSON only, no markdown."
-            },
-            {
-                "role":"user",
-                "content":prompt
-            }
-        ]
-        response_text=client.chat(messages=messages,temperature=OLLAMA_TEMPERATURE,max_token=OLLAMA_MAX_TOKENS)
-
-        analysis=parse_ollama_response(response_text)
-
-        analysis["analyzed_at"]=datetime.now().isoformat()
-        analysis["model_used"]=OLLAMA_MODEL
-        analysis["run_id"]=failure.get("id")
-        analysis["run_number"]=failure.get("run_number")
-
-        logger.info(
-            f"Analysis complete: {analysis.get('error_category')}"
-            f"(confidence: {analysis.get('confidence_score',0):.2f})"
+        
+        # Call Ollama with simpler approach
+        response_text = client.generate(
+            prompt=prompt,
+            temperature=0.1,  # Slightly higher for creativity
+            max_tokens=1024   # Shorter for faster response
         )
-
+        
+        logger.debug(f"Raw response: {response_text[:200]}...")
+        
+        # Try to parse JSON
+        analysis = parse_ollama_response(response_text)
+        
+        # Validate critical fields
+        if analysis.get("error_category") == "unknown" and "parse_error" not in analysis:
+            # Model responded but with generic category, try to infer from logs
+            if "timeout" in logs.lower():
+                analysis["error_category"] = "timeout_error"
+                analysis["confidence_score"] = 0.6
+            elif "modulenotfounderror" in logs.lower() or "no module named" in logs.lower():
+                analysis["error_category"] = "dependency_error"
+                analysis["confidence_score"] = 0.7
+            elif "assertion" in logs.lower():
+                analysis["error_category"] = "test_failure"
+                analysis["confidence_score"] = 0.6
+            elif "permission denied" in logs.lower():
+                analysis["error_category"] = "permission_error"
+                analysis["confidence_score"] = 0.7
+        
+        # Add metadata
+        analysis["analyzed_at"] = datetime.now().isoformat()
+        analysis["model_used"] = OLLAMA_MODEL
+        analysis["run_id"] = failure.get("id")
+        analysis["run_number"] = failure.get("run_number")
+        
+        logger.info(
+            f"Analysis complete: {analysis.get('error_category')} "
+            f"(confidence: {analysis.get('confidence_score', 0):.2f})"
+        )
+        
         return analysis
-    
+        
     except Exception as e:
         logger.error(f"Ollama analysis failed: {e}")
-
-        return{
-            "error_category":"unknown",
-            "error_type":"analysis_failed",
-            "severity":"medium",
-            "root_cause":f"Failed to analyze: {str(e)}",
-            "affected_components":[],
-            "is_flaky":False,
-            "confidence_score":0.0,
-            "suggested_fix":"Manual investigation required",
-            "reasoning":f"Automatic analysis failed: {str(e)}",
-            "analyzed_at":datetime.now().isoformat(),
-            "run_id":failure.get("id"),
-            "run_number":failure.get("run_number"),
-            "error":str(e)
+        
+        # Fallback with basic pattern matching
+        error_category = "unknown"
+        confidence = 0.3
+        
+        logs_lower = logs.lower()
+        if "timeout" in logs_lower:
+            error_category = "timeout_error"
+            confidence = 0.6
+        elif "modulenotfounderror" in logs_lower or "no module named" in logs_lower:
+            error_category = "dependency_error"
+            confidence = 0.7
+        elif "assertion" in logs_lower or "fail" in logs_lower:
+            error_category = "test_failure"
+            confidence = 0.5
+        elif "permission denied" in logs_lower or "authentication failed" in logs_lower:
+            error_category = "permission_error"
+            confidence = 0.7
+        elif "webpack" in logs_lower or "build" in logs_lower:
+            error_category = "build_error"
+            confidence = 0.5
+        
+        return {
+            "error_category": error_category,
+            "error_type": "fallback_analysis",
+            "severity": "medium",
+            "root_cause": f"Fallback analysis: {str(e)[:100]}",
+            "affected_components": [],
+            "is_flaky": False,
+            "confidence_score": confidence,
+            "suggested_fix": "Review logs manually for detailed analysis",
+            "reasoning": f"Automatic analysis failed, using pattern matching. Error: {str(e)}",
+            "analyzed_at": datetime.now().isoformat(),
+            "run_id": failure.get("id"),
+            "run_number": failure.get("run_number"),
+            "fallback": True
         }
 
 async def failure_analysis_node(state:AgentState)->AgentState:
