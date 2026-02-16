@@ -211,7 +211,7 @@ if __name__=="__main__":
             name="Healing Test",
             role="healer",
             status="analysis_complete",
-            memory=["[timestamp] Analysis complete"]
+            memory=["[timestamp] Analysis complete"],
             goals=["Test healing"],
             current_task=None,
             sub_tasks=[],
@@ -236,8 +236,51 @@ if __name__=="__main__":
                         }
                     },
                     {
-                        
+                        "id":456,
+                        "run_number":2,
+                        "name":"Test CI",
+                        "analysis":{
+                            "error_category":"network_error",
+                            "severity":"medium",
+                            "is_flaky":False,
+                            "confidence_score":0.7
+                        }
                     }
                 ]
-            }
+            },
+            last_updated=datetime.now().isoformat()
         )
+
+        print("Initial State: ")
+        print(f" Healable failures: {test_state.context['routing_decision']['healable_count']}")
+        print(f" Flaky tests: {test_state.context['routing_decision']['flaky_count']}")
+        print()
+        print("Execting retry_node...")
+        print("Note: Will fail with test data (no real GitHub access)")
+        print()
+
+        try:
+            result_state=await retry_node(test_state)
+
+            print("Final State: ")
+            print(f" Status: {result_state.status}")
+            print(f" Current Task: {result_state.current_task}")
+
+            retry_results=result_state.context.get("retry_results",{})
+            print(f"\nRetry Results:")
+            print(f" Total Retried: {retry_results.get('total_retried',0)}")
+            print(f" Successful: {retry_results.get('successful_retries',0)}")
+            print(f" Failed: {retry_results.get('failed_retries',0)}")
+            print(f" Skipped: {retry_results.get('skipped',0)}")
+
+            print(f"\nMemory Log:")
+            for entry in result_state.memory[-5:]:
+                print(f" {entry}")
+
+        except Exception as e:
+            print(f"Excepted error (no real GitHub access): {e}")
+        
+        print("Test Complete")
+    asyncio.run(test_retry_node())
+
+#python -m src.agents.nodes.healing
