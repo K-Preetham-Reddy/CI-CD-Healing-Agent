@@ -92,4 +92,152 @@ async def retry_node(state: AgentState) -> AgentState:
             logger.info(f"Skipping retry for Run #{run_number} - not healable")
             continue
 
+        logger.info(f"Retrying Run {run_number} - Reason: {retry_reason}")
+        state.current_task=f"Retrying workflow run {run_number}"
+
+        try:
+            result = await github.rerun_workflow(
+                owner=owner,
+                repo=repo,
+                run_id=run_id,
+                failed_jobs_only=True
+            )
+
+            if result.success:
+                retry_results["successful_retries"]+=1
+                retry_results["total_retried"]+=1
+
+                retry_info={
+                    "run_id":run_id,
+                    "run_number":run_number,
+                    "status":"success",
+                    "reason":retry_reason,
+                    "message":result.message,
+                    "timestamp":timestamp
+                }
+                retry_results["details"].append(retry_info)
+
+                logger.info(f"Sucessfully retried Run #{run_number}")
+                state.memory.append(f"[{timestamp}] Successful - Retried Run #{run_number}: {retry_reason}")
+            else:
+                retry_results["failed_retries"]+=1
+                retry_results["total_retries"]+=1
+
+                retry_info={
+                    "run_id":run_id,
+                    "run_number":run_number,
+                    "status":"success",
+                    "reason":retry_reason,
+                    "message":result.message,
+                    "timestamp":timestamp
+                }
+
+                retry_results["details"].append(retry_info)
+
+                logger.warning(f" Failed to retry Run #{run_number}: {result.message}")
+                state.memory.append(f"[{timestamp}] Failed - Retry failed for Run #{run_number}:{result.message}")
+            
+        except Exception as e:
+            retry_results["failed_retries"]+=1
+            retry_results["total_Retried"]+=1
+
+            error_msg=str(e)
+            retry_info={
+                "run_id":run_id,
+                "run_number":run_number,
+                "status":"error",
+                "reason":retry_reason,
+                "message":error_msg,
+                "timestamp":timestamp
+            }
+            retry_results["details"].append(retry_info)
+
+            logger.error(f"Error retrying Run #{run_number}: {e}")
+            state.memory.append(f"[{timestamp}] ERROR retrying Run #{run_number}: {error_msg}")
+
+        state.context["retry_results"]=retry_results
+        state.context["last_healing_attempt"]=timestamp
+
+        if retry_results["successful_retries"]>0:
+            state.status="healing_complete"
+            state.current_task=(
+                f"Healing complete: {retry_results['successful_retries']} workflows retried"
+            )
+        elif retry_results["total_retried"]==0:
+            state.status="healing_skipped"
+            state.current_task="No failures required retry"
+        else:
+            state.status="healing_partial"
+            state.current_task=(f"Healing partially complete: "
+                f"{retry_results['failed_retries']} retries failed")
+            
+        state.memory.append(
+            f"[{timestamp}] Healing summary: "
+            f"{retry_results['successful_retries']} successful, "
+            f"{retry_results['failed_retries']} failed,"
+            f"{retry_results['skipped']} skipped" 
+        )
         
+        logger.info(
+            f"Healing complete: {retry_results['successful_retries']}/{retry_results['total_retried']} successful retries"
+        )
+
+        state.last_updated=timestamp
+
+        return state
+    
+def get_healing_summary(state: AgentState) -> Dict[str,Any]:
+    retry_results=state.context.get("retry_results",{})
+
+    return {
+        "total_retried":retry_results.get("total_retried",0),
+        "successful":retry_results.get("successful_retries",0),
+        "failed":retry_results.get("failed_retries",0),
+        "skipped":retry_results.get("skipped",0),
+        "success_rate":(
+            retry_results.get("successful_retries",0)/max(retry_results.get("total_retried",1),1)*100
+        ),
+        "details":retry_results.get("details",[])
+    }
+
+if __name__=="__main__":
+    import asyncio
+
+    async def test_retry_node():
+        print("Testing Retry Node")
+
+        test_state=AgentState(
+            id="test_healing",
+            name="Healing Test",
+            role="healer",
+            status="analysis_complete",
+            memory=["[timestamp] Analysis complete"]
+            goals=["Test healing"],
+            current_task=None,
+            sub_tasks=[],
+            context={
+                "owner":"test_owner",
+                "repo":"test-repo",
+                "routing_decision":{
+                    "healable_count":2,
+                    "flaky_count":1,
+                    "critical_count":0
+                },
+                "analyzed_failures":[
+                    {
+                        "id":123,
+                        "run_number":1,
+                        "name":"Test CI",
+                        "analysis":{
+                            "error_category":"timeout_error",
+                            "severity":"medium",
+                            "is_flaky":True,
+                            "confidence_score":0.8
+                        }
+                    },
+                    {
+                        
+                    }
+                ]
+            }
+        )
